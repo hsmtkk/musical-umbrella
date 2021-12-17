@@ -73,5 +73,25 @@ func (v *VirusTotal) uploadFile(contentType string, reqBody []byte) ([]byte, err
 	return body, nil
 }
 
-func (v *VirusTotal) GetReport() {
+func (v *VirusTotal) GetReport(id string) ([]byte, error) {
+	url := fmt.Sprintf("%s/files/%s", v.baseURL, id)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed make request; %w", err)
+	}
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("x-apikey", v.apiKey)
+	resp, err := v.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to post; %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("non 2XX HTTP status code; %d; %s", resp.StatusCode, resp.Status)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response; %w", err)
+	}
+	return body, nil
 }

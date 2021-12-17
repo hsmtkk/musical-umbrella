@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/hsmtkk/musical-umbrella/cmd/env"
 	"github.com/hsmtkk/musical-umbrella/virustotal"
@@ -12,13 +14,15 @@ import (
 var command = &cobra.Command{}
 
 var uploadFileCommand = &cobra.Command{
-	Use: "upload-file",
-	Run: uploadFile,
+	Use:  "upload-file file",
+	Run:  uploadFile,
+	Args: cobra.ExactArgs(1),
 }
 
 var getReportCommand = &cobra.Command{
-	Use: "get-report",
-	Run: getReport,
+	Use:  "get-report id",
+	Run:  getReport,
+	Args: cobra.ExactArgs(1),
 }
 
 func init() {
@@ -33,9 +37,16 @@ func main() {
 }
 
 func uploadFile(cmd *cobra.Command, args []string) {
+	filePath := args[0]
 	apiKey := env.RequiredEnv("API_KEY")
 	v := virustotal.New(apiKey)
-	resp, err := v.UploadFile("eicar", []byte(`X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*`))
+
+	fileName := filepath.Base(filePath)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := v.UploadFile(fileName, content)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,4 +54,13 @@ func uploadFile(cmd *cobra.Command, args []string) {
 }
 
 func getReport(cmd *cobra.Command, args []string) {
+	id := args[0]
+	apiKey := env.RequiredEnv("API_KEY")
+	v := virustotal.New(apiKey)
+
+	resp, err := v.GetReport(id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(resp))
 }
