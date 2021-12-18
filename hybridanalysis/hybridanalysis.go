@@ -8,6 +8,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 )
 
 type HybridAnalysis struct {
@@ -32,24 +33,17 @@ func NewForTest(client *http.Client, baseURL string) *HybridAnalysis {
 	return &HybridAnalysis{client, apiKey, baseURL}
 }
 
-type SubmitFileResponse struct {
-	/*
-		rawRequest []byte
-		rarResponse []byte
-	*/
-}
-
-func (h *HybridAnalysis) SubmitFile(fileName string, content []byte) (SubmitFileResponse, error) {
+func (h *HybridAnalysis) SubmitFile(fileName string, content []byte) ([]byte, error) {
 	contentType, reqBody, err := h.createMultiPartRequest(fileName, content)
 	if err != nil {
-		return SubmitFileResponse{}, err
+		return nil, err
 	}
 	respBytes, err := h.submitFile(contentType, reqBody)
 	if err != nil {
-		return SubmitFileResponse{}, err
+		return nil, err
 	}
 	log.Print(string(respBytes))
-	return SubmitFileResponse{}, nil
+	return nil, nil
 }
 
 func (h *HybridAnalysis) createMultiPartRequest(fileName string, content []byte) (string, []byte, error) {
@@ -78,21 +72,76 @@ func (h *HybridAnalysis) submitFile(contentType string, reqBody []byte) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("failed make request; %w", err)
 	}
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", contentType)
-	req.Header.Add("User-Agent", "Falcon Sandbox")
-	req.Header.Add("api-key", h.apiKey)
+	headers := map[string]string{
+		"Accept":       "application/json",
+		"Content-Type": contentType,
+		"User-Agent":   "Falcon Sandbox",
+		"api-key":      h.apiKey,
+	}
+	return h.doHTTPRequest(req, headers)
+}
+
+// report endpoint needs `default` permission.
+// my API key has `restricted` permission which is insufficient.
+func (h *HybridAnalysis) GetReportByJobID(jobID string) ([]byte, error) {
+	url := fmt.Sprintf("%s/report/%s/report/json", h.baseURL, jobID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request; %w", err)
+	}
+	headers := map[string]string{
+		"Accept":     "application/json",
+		"User-Agent": "Falcon Sandbox",
+		"api-key":    h.apiKey,
+	}
+	return h.doHTTPRequest(req, headers)
+}
+
+func (h *HybridAnalysis) GetReportBySHA256(sha256 string, environmentID int) ([]byte, error) {
+	url := fmt.Sprintf("%s/report/%s:%d/report/json", h.baseURL, sha256, environmentID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request; %w", err)
+	}
+	headers := map[string]string{
+		"Accept":     "application/json",
+		"User-Agent": "Falcon Sandbox",
+		"api-key":    h.apiKey,
+	}
+	return h.doHTTPRequest(req, headers)
+}
+
+func (h *HybridAnalysis) doHTTPRequest(req *http.Request, headers map[string]string) ([]byte, error) {
+	for k, v := range headers {
+		req.Header.Add(k, v)
+	}
+
+	// debug
+	reqBytes, err := httputil.DumpRequest(req, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dump request; %w", err)
+	}
+	log.Print(string(reqBytes))
+
 	resp, err := h.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to post; %w", err)
+		return nil, fmt.Errorf("failed to send request; %w", err)
 	}
 	defer resp.Body.Close()
+
+	// debug
+	respBytes, err := httputil.DumpResponse(resp, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dump response; %w", err)
+	}
+	log.Print(string(respBytes))
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("non 2XX HTTP status code; %d; %s", resp.StatusCode, resp.Status)
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response; %w", err)
+		return nil, fmt.Errorf("failed to read response ; %w", err)
 	}
 	return body, nil
 }
