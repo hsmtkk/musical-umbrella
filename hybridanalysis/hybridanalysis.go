@@ -32,7 +32,12 @@ func NewForTest(client *http.Client, baseURL string) *HybridAnalysis {
 	return &HybridAnalysis{client, apiKey, baseURL}
 }
 
-type SubmitFileResponse struct{}
+type SubmitFileResponse struct {
+	/*
+		rawRequest []byte
+		rarResponse []byte
+	*/
+}
 
 func (h *HybridAnalysis) SubmitFile(fileName string, content []byte) (SubmitFileResponse, error) {
 	contentType, reqBody, err := h.createMultiPartRequest(fileName, content)
